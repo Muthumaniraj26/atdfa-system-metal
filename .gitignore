@@ -1,0 +1,12 @@
+# Large Model Weights
+*.pth
+*.onnx
+
+# Temporary Analysis Files
+*_temp.jpg
+report.pdf
+
+# Python Environment
+__pycache__/
+venv/
+.envsam_vit_h_4b8939.pth
