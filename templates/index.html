@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>ATDFA Core Analysis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid #1e293b;
+        }
+    </style>
+</head>
+
+<body class="bg-slate-950 text-slate-200 p-8 font-sans">
+    <div class="max-w-7xl mx-auto">
+        <header class="text-center mb-10 border-b border-slate-800 pb-6 relative">
+            <h1 class="text-4xl font-black text-blue-500 italic">ATDFA SYSTEM</h1>
+            <p class="text-slate-500 uppercase tracking-widest text-[10px] mt-2 font-bold">Thermal Differential
+                Measurement Engine</p>
+            <button onclick="document.getElementById('detailsModal').classList.remove('hidden')"
+                class="absolute top-0 right-0 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-bold text-slate-300 transition border border-slate-700">
+                SYSTEM DETAILS
+            </button>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="glass-panel p-8 rounded-3xl h-fit shadow-2xl">
+                <label class="block text-xs font-bold text-slate-500 mb-4 uppercase">Specimen Source</label>
+
+                <!-- Toggle between File and Camera -->
+                <div class="flex gap-4 mb-6">
+                    <button onclick="toggleSource('file')" id="btnFile"
+                        class="flex-1 py-2 rounded-xl text-xs font-bold bg-blue-600 text-white transition">UPLOAD
+                        FILE</button>
+                    <button onclick="toggleSource('camera')" id="btnCam"
+                        class="flex-1 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-400 hover:bg-slate-700 transition">USE
+                        CAMERA</button>
+                </div>
+
+                <!-- File Input -->
+                <div id="fileInputSection">
+                    <input type="file" id="file"
+                        class="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-blue-600 file:text-white mb-8">
+                </div>
+
+                <!-- Camera UI -->
+                <div id="cameraSection" class="hidden mb-8">
+                    <div
+                        class="relative rounded-2xl overflow-hidden border border-slate-700 bg-black aspect-video mb-4">
+                        <video id="videoFeed" class="w-full h-full object-cover" autoplay playsinline></video>
+                        <canvas id="captureCanvas" class="hidden"></canvas>
+                    </div>
+                    <button onclick="captureImage()"
+                        class="w-full py-3 bg-slate-700 hover:bg-slate-600 rounded-xl text-xs font-bold text-white transition flex items-center justify-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        CAPTURE FRAME
+                    </button>
+                    <p id="captureStatus" class="text-center text-[10px] text-slate-500 mt-2 font-mono hidden">Image
+                        Captured!</p>
+                </div>
+
+                <div class="space-y-4">
+                    <button onclick="send('before')"
+                        class="w-full bg-emerald-600 hover:bg-emerald-700 p-4 rounded-2xl font-black transition transform active:scale-95 shadow-lg shadow-emerald-900/20">1.
+                        ANALYZE BASELINE</button>
+                    <button onclick="send('after')"
+                        class="w-full bg-orange-600 hover:bg-orange-700 p-4 rounded-2xl font-black transition transform active:scale-95 shadow-lg shadow-orange-900/20">2.
+                        ANALYZE FORGED</button>
+                    <button onclick="window.location.href='/report'"
+                        class="w-full border-2 border-slate-700 text-slate-400 p-3 rounded-2xl font-bold hover:border-red-500 hover:text-red-500 transition mt-6">DOWNLOAD
+                        PDF REPORT</button>
+                </div>
+            </div>
+
+            <div class="lg:col-span-2 space-y-6">
+                <div id="metricBar" class="hidden grid grid-cols-3 gap-4">
+                    <div id="mLength" class="bg-slate-900 p-4 rounded-2xl border border-slate-800 text-center">
+                        <p class="text-[10px] text-slate-500 uppercase">Length</p>
+                        <p id="vL" class="text-2xl font-mono text-white">0.00mm</p>
+                    </div>
+                    <div id="mBreadth" class="bg-slate-900 p-4 rounded-2xl border border-slate-800 text-center">
+                        <p class="text-[10px] text-slate-500 uppercase">Breadth</p>
+                        <p id="vB" class="text-2xl font-mono text-white">0.00mm</p>
+                    </div>
+                    <div id="mRadius"
+                        class="hidden col-span-2 bg-slate-900 p-4 rounded-2xl border border-slate-800 text-center">
+                        <p class="text-[10px] text-slate-500 uppercase">Radius</p>
+                        <p id="vR" class="text-2xl font-mono text-blue-400">0.00mm</p>
+                    </div>
+                    <div
+                        class="bg-slate-900 p-4 rounded-2xl border border-slate-800 text-center flex flex-col justify-center">
+                        <p id="vStatus" class="text-xl font-black uppercase">---</p>
+                        <p id="vDiff" class="text-[10px] text-slate-500">0.00mm delta</p>
+                    </div>
+                </div>
+
+                <div id="chartContainer" class="hidden glass-panel p-6 rounded-[2.5rem] mt-6">
+                    <h3 class="text-sm font-bold text-slate-400 uppercase mb-4">Deformation Graph</h3>
+                    <canvas id="comparisonChart"></canvas>
+                </div>
+
+                <div id="visView" class="hidden glass-panel p-6 rounded-[2.5rem] relative mt-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <span id="shapeTag"
+                            class="px-4 py-1 bg-blue-600 text-[10px] font-black rounded-full uppercase italic">DETECTING...</span>
+                        <div class="flex gap-4 text-[9px] font-bold text-slate-500 uppercase">
+                            <span><span class="inline-block w-2 h-2 bg-blue-500 rounded-full mr-1"></span>
+                                Squeeze</span>
+                            <span><span class="inline-block w-2 h-2 bg-red-500 rounded-full mr-1"></span> Expand</span>
+                        </div>
+                    </div>
+                    <img id="mainImg" src="" class="w-full rounded-2xl shadow-2xl border border-slate-800">
+                </div>
+            </div>
+        </div>
+        <!-- System Details Modal -->
+        <div id="detailsModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden overflow-y-auto">
+            <div class="min-h-screen flex items-center justify-center p-4">
+                <div class="glass-panel w-full max-w-4xl p-8 rounded-3xl shadow-2xl relative border border-slate-700">
+                    <button onclick="document.getElementById('detailsModal').classList.add('hidden')"
+                        class="absolute top-6 right-6 text-slate-400 hover:text-white transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+
+                    <h2 class="text-3xl font-black text-white mb-2">CORE ARCHITECTURE</h2>
+                    <p class="text-slate-400 text-sm mb-8 uppercase tracking-widest">Deep Learning & Computer Vision
+                        Integration</p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- 1. SAM -->
+                        <div
+                            class="bg-slate-900/50 p-6 rounded-2xl border border-slate-800 hover:border-blue-500/50 transition">
+                            <div class="flex items-center gap-3 mb-3">
+                                <span class="p-2 bg-blue-900/30 rounded-lg text-blue-400 font-bold">01</span>
+                                <h3 class="font-bold text-lg text-slate-200">Zero-Shot Segmentation (SAM)</h3>
+                            </div>
+                            <p class="text-sm text-slate-400 leading-relaxed">
+                                Traditional edge detection fails on forged metal due to oxide scale and glare. We use
+                                the
+                                <strong class="text-white">Segment Anything Model (SAM)</strong>, a Vision Transformer
+                                (ViT).
+                                It provides "Zero-Shot" capability to isolate specimens without retraining, generating
+                                high-fidelity binary masks.
+                            </p>
+                        </div>
+
+                        <!-- 2. Shape Classification -->
+                        <div
+                            class="bg-slate-900/50 p-6 rounded-2xl border border-slate-800 hover:border-emerald-500/50 transition">
+                            <div class="flex items-center gap-3 mb-3">
+                                <span class="p-2 bg-emerald-900/30 rounded-lg text-emerald-400 font-bold">02</span>
+                                <h3 class="font-bold text-lg text-slate-200">Geometric Classification</h3>
+                            </div>
+                            <p class="text-sm text-slate-400 leading-relaxed">
+                                Intelligent UI that dynamically toggles measurements. We calculate <strong
+                                    class="text-white">Circularity Score</strong>
+                                (Area / π * r²). Objects filling >80% of their enclosing circle are classified as
+                                "Circular", others as Rectangular/Polygonal.
+                            </p>
+                        </div>
+
+                        <!-- 3. Rotational Invariance -->
+                        <div
+                            class="bg-slate-900/50 p-6 rounded-2xl border border-slate-800 hover:border-purple-500/50 transition">
+                            <div class="flex items-center gap-3 mb-3">
+                                <span class="p-2 bg-purple-900/30 rounded-lg text-purple-400 font-bold">03</span>
+                                <h3 class="font-bold text-lg text-slate-200">Rotational Invariance</h3>
+                            </div>
+                            <p class="text-sm text-slate-400 leading-relaxed">
+                                Metal parts are rarely perfectly aligned. We use <strong
+                                    class="text-white">minAreaRect</strong> to calculate
+                                an Oriented Bounding Box (OBB) that rotates with the object, ensuring consistent
+                                Length/Breadth measurements regardless of orientation.
+                            </p>
+                        </div>
+
+                        <!-- 4. Calibration -->
+                        <div
+                            class="bg-slate-900/50 p-6 rounded-2xl border border-slate-800 hover:border-orange-500/50 transition">
+                            <div class="flex items-center gap-3 mb-3">
+                                <span class="p-2 bg-orange-900/30 rounded-lg text-orange-400 font-bold">04</span>
+                                <h3 class="font-bold text-lg text-slate-200">Metric Calibration</h3>
+                            </div>
+                            <p class="text-sm text-slate-400 leading-relaxed">
+                                Cameras see pixels; engineers need millimeters. A precise <strong
+                                    class="text-white">Pixel-to-MM Ratio</strong>
+                                scaling factor allows for sub-millimeter deformation tracking across the forging
+                                process.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- 5. Heatmapping (Full Width) -->
+                    <div
+                        class="mt-6 bg-slate-900/50 p-6 rounded-2xl border border-slate-800 hover:border-red-500/50 transition">
+                        <div class="flex items-center gap-3 mb-3">
+                            <span class="p-2 bg-red-900/30 rounded-lg text-red-400 font-bold">05</span>
+                            <h3 class="font-bold text-lg text-slate-200">Differential Heatmapping</h3>
+                        </div>
+                        <p class="text-sm text-slate-400 leading-relaxed mb-4">
+                            The core of deformation analysis. We perform <strong class="text-white">Boolean Mask
+                                Subtraction</strong> between Baseline and Forged masks.
+                        </p>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="p-3 bg-red-900/20 rounded-xl border border-red-900/50 text-center">
+                                <span class="text-red-400 font-bold block text-xs uppercase mb-1">Expansion (Red)</span>
+                                <span class="text-xs text-slate-500">Pixels in After but not Before</span>
+                            </div>
+                            <div class="p-3 bg-blue-900/20 rounded-xl border border-blue-900/50 text-center">
+                                <span class="text-blue-400 font-bold block text-xs uppercase mb-1">Squeeze (Blue)</span>
+                                <span class="text-xs text-slate-500">Pixels in Before but not After</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tech Stack -->
+                    <div
+                        class="mt-8 pt-8 border-t border-slate-800 flex flex-wrap justify-between items-center text-xs font-mono text-slate-500">
+                        <div>Backend: <span class="text-slate-300">Flask (Python)</span></div>
+                        <div>AI Engine: <span class="text-slate-300">PyTorch & SAM (vit_h)</span></div>
+                        <div>CV Logic: <span class="text-slate-300">OpenCV & NumPy</span></div>
+                        <div>Reporting: <span class="text-slate-300">FPDF</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            let chartInstance = null;
+            let currentMode = 'file'; // 'file' or 'camera'
+            let capturedBlob = null;
+            let stream = null;
+
+            function toggleSource(mode) {
+                currentMode = mode;
+                const btnFile = document.getElementById('btnFile');
+                const btnCam = document.getElementById('btnCam');
+                const fileSec = document.getElementById('fileInputSection');
+                const camSec = document.getElementById('cameraSection');
+
+                if (mode === 'file') {
+                    btnFile.className = "flex-1 py-2 rounded-xl text-xs font-bold bg-blue-600 text-white transition";
+                    btnCam.className = "flex-1 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-400 hover:bg-slate-700 transition";
+                    fileSec.classList.remove('hidden');
+                    camSec.classList.add('hidden');
+                    stopCamera();
+                } else {
+                    btnCam.className = "flex-1 py-2 rounded-xl text-xs font-bold bg-blue-600 text-white transition";
+                    btnFile.className = "flex-1 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-400 hover:bg-slate-700 transition";
+                    camSec.classList.remove('hidden');
+                    fileSec.classList.add('hidden');
+                    startCamera();
+                }
+            }
+
+            async function startCamera() {
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                    document.getElementById('videoFeed').srcObject = stream;
+                } catch (err) {
+                    alert("Error accessing camera: " + err.message);
+                }
+            }
+
+            function stopCamera() {
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                    stream = null;
+                }
+            }
+
+            function captureImage() {
+                const video = document.getElementById('videoFeed');
+                const canvas = document.getElementById('captureCanvas');
+                const status = document.getElementById('captureStatus');
+
+                if (!stream) return alert("Camera not active");
+
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                canvas.getContext('2d').drawImage(video, 0, 0);
+
+                canvas.toBlob(blob => {
+                    capturedBlob = blob;
+                    status.classList.remove('hidden');
+                    status.innerText = "Frame Captured!";
+                    setTimeout(() => status.classList.add('hidden'), 2000);
+                }, 'image/jpeg');
+            }
+
+            async function send(stage) {
+                let f = null;
+
+                if (currentMode === 'file') {
+                    f = document.getElementById('file').files[0];
+                    if (!f) return alert("Select specimen image");
+                } else {
+                    if (!capturedBlob) return alert("Capture an image from camera first");
+                    f = capturedBlob;
+                }
+
+                const fd = new FormData();
+                fd.append('image', f);
+                fd.append('stage', stage);
+
+                const res = await fetch('/analyze', { method: 'POST', body: fd });
+                const data = await res.json();
+                const dims = data.current;
+
+                document.getElementById('metricBar').classList.remove('hidden');
+                document.getElementById('visView').classList.remove('hidden');
+
+                // Image Overlays
+                document.getElementById('mainImg').src = "data:image/jpeg;base64," + (data.overlay || dims.visual);
+
+                // Shape Specific Logic
+                if (dims.is_circular) {
+                    document.getElementById('shapeTag').innerText = "Shape: " + dims.shape_name;
+                    document.getElementById('mRadius').classList.remove('hidden');
+                    document.getElementById('mRadius').classList.remove('col-span-2'); // Fit in grid
+                    document.getElementById('mLength').classList.remove('hidden');
+                    document.getElementById('mBreadth').classList.add('hidden');
+
+                    document.getElementById('vR').innerText = dims.radius + "mm";
+                    document.getElementById('vL').innerText = dims.length + "mm";
+                } else {
+                    document.getElementById('shapeTag').innerText = "Shape: " + dims.shape_name;
+                    document.getElementById('mRadius').classList.add('hidden');
+                    document.getElementById('mLength').classList.remove('hidden');
+                    document.getElementById('mBreadth').classList.remove('hidden');
+                    document.getElementById('vL').innerText = dims.length + "mm";
+                    document.getElementById('vB').innerText = dims.breadth + "mm";
+                }
+
+                if (stage === 'after') {
+                    document.getElementById('vStatus').innerText = data.analysis;
+                    document.getElementById('vStatus').className = "text-xl font-black " +
+                        (data.analysis === 'EXPANDED' ? 'text-green-500' : 'text-red-500');
+                    document.getElementById('vDiff').innerText = (data.difference || 0) + "mm delta";
+
+                    // --- Graph Visualization ---
+                    document.getElementById('chartContainer').classList.remove('hidden');
+                    const ctx = document.getElementById('comparisonChart').getContext('2d');
+
+                    // Determine metric to plot
+                    const metricLabel = dims.is_circular ? 'Radius (mm)' : 'Length (mm)';
+                    const currentVal = dims.is_circular ? dims.radius : dims.length;
+                    const baselineVal = currentVal - (data.difference || 0); // Reverse calc baseline from difference
+
+                    if (chartInstance) chartInstance.destroy();
+
+                    chartInstance = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: ['Baseline', 'Forged'],
+                            datasets: [{
+                                label: metricLabel,
+                                data: [baselineVal, currentVal],
+                                backgroundColor: [
+                                    'rgba(52, 211, 153, 0.5)', // Emerald for Baseline
+                                    'rgba(249, 115, 22, 0.5)'  // Orange for Forged
+                                ],
+                                borderColor: [
+                                    'rgb(52, 211, 153)',
+                                    'rgb(249, 115, 22)'
+                                ],
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            scales: {
+                                y: {
+                                    beginAtZero: false, // Focus on the difference
+                                    grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                                    ticks: { color: '#94a3b8' }
+                                },
+                                x: {
+                                    grid: { display: false },
+                                    ticks: { color: '#94a3b8' }
+                                }
+                            },
+                            plugins: {
+                                legend: { labels: { color: '#cbd5e1' } }
+                            }
+                        }
+                    });
+
+                } else {
+                    document.getElementById('vStatus').innerText = "BASELINE SET";
+                    document.getElementById('vStatus').className = "text-xl font-black text-blue-400";
+                    document.getElementById('vDiff').innerText = "Baseline Established";
+
+                    // Hide chart on baseline set
+                    document.getElementById('chartContainer').classList.add('hidden');
+                }
+            }
+        </script>
+</body>
+
+</html>
