@@ -25,3 +25,42 @@ Due to the large file size (2.6GB), the weights are not included in this reposit
    ```bash
    git clone [https://github.com/Muthumaniraj26/atdfa-system-metal.git](https://github.com/Muthumaniraj26/atdfa-system-metal.git)
    cd atdfa-system-metal
+Install Dependencies:
+
+Bash
+pip install -r requirements.txt
+Download Model Weights: Place the sam_vit_h_4b8939.pth file in the root directory.
+
+Run Application:
+
+Bash
+python app.py
+📊 Technical Flow
+Baseline Setup: Upload the 'Before' image to establish a geometric reference.
+
+Forging Analysis: Upload the 'After' image to detect changes.
+
+Deformation Export: The system generates a PDF report comparing metrics and visualizing material displacement.
+
+Developed by Muthumaniraj S. - Machine Learning Engineer @ RIT
+
+
+---
+
+### **Project Details Checklist**
+
+| Feature | Implementation |
+| :--- | :--- |
+| **Model Link** | [sam_vit_h_4b8939.pth](https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth) |
+| **Tech Stack** | Python, Flask, PyTorch, OpenCV, Tailwind CSS |
+| **Deployment** | Hugging Face Spaces (Cloud-Fetch Mode) |
+| **Logic Type** | Pixel-to-Metric Calibration & Mask Subtraction |
+
+### **Next Step**
+You can now create a new file named `README.md` in your `D:/mech` folder, paste the content above, and push it to both GitHub and Hugging Face:
+
+```bash
+git add README.md
+git commit -m "Add professional README with technical documentation"
+git push github main
+git push hf main
