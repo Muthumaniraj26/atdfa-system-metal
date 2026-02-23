@@ -29,40 +29,116 @@ storage = {"before": None, "after": None}
 def analyze_specimen(image_bytes):
     nparr = np.frombuffer(image_bytes.read(), np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    
-    predictor.set_image(img)
-    # --- Improved Segmentation Strategy ---
-    # Instead of prompting with the full image box (which often selects the background),
-    # we use a central point prompt to target the object in the middle of the frame.
     h, w = img.shape[:2]
+    image_area = w * h
     
-    # Define a central point for the prompt
-    input_point = np.array([[w // 2, h // 2]])
-    input_label = np.array([1])  # 1 indicates a foreground point
-
-    # Generate masks using the point prompt
-    masks, scores, _ = predictor.predict(
-        point_coords=input_point,
-        point_labels=input_label,
-        multimask_output=True, # Allow SAM to return multiple valid masks
-    )
+    # ============================================================
+    # STAGE 1: LOCATE the object using traditional Computer Vision
+    # This finds WHERE the object is, regardless of position/angle
+    # ============================================================
     
-    # Select the mask with the highest score that is NOT the entire image
+    # 1a. Preprocessing: CLAHE contrast enhancement + noise reduction
+    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    l_ch, a_ch, b_ch = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+    l_ch = clahe.apply(l_ch)
+    enhanced = cv2.merge([l_ch, a_ch, b_ch])
+    enhanced = cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
+    enhanced = cv2.GaussianBlur(enhanced, (5, 5), 0)
+    
+    # 1b. Convert to grayscale and apply Otsu's thresholding
+    gray = cv2.cvtColor(enhanced, cv2.COLOR_BGR2GRAY)
+    _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    
+    # 1c. Morphological cleanup to remove noise and fill holes
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+    thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=3)
+    thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=2)
+    
+    # 1d. Find the largest contour — this is our detected object
+    pre_contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    # Filter out tiny noise contours (< 0.5% of image area)
+    valid_contours = [c for c in pre_contours if cv2.contourArea(c) > 0.005 * image_area]
+    
+    # ============================================================
+    # STAGE 2: SEGMENT precisely with SAM using detected location
+    # ============================================================
+    
+    predictor.set_image(enhanced)
+    
+    if valid_contours:
+        # We found the object with traditional CV — use its location to prompt SAM
+        main_contour = max(valid_contours, key=cv2.contourArea)
+        
+        # Get the bounding box of the detected object
+        bx, by, bw, bh = cv2.boundingRect(main_contour)
+        # Add padding around the detected region (10% on each side)
+        pad_x, pad_y = int(bw * 0.1), int(bh * 0.1)
+        box_x1 = max(0, bx - pad_x)
+        box_y1 = max(0, by - pad_y)
+        box_x2 = min(w, bx + bw + pad_x)
+        box_y2 = min(h, by + bh + pad_y)
+        input_box = np.array([box_x1, box_y1, box_x2, box_y2])
+        
+        # Get the centroid of the detected object as a point prompt
+        M = cv2.moments(main_contour)
+        if M["m00"] != 0:
+            obj_cx = int(M["m10"] / M["m00"])
+            obj_cy = int(M["m01"] / M["m00"])
+        else:
+            obj_cx = bx + bw // 2
+            obj_cy = by + bh // 2
+        
+        input_points = np.array([[obj_cx, obj_cy]])
+        input_labels = np.array([1])  # foreground
+        
+        # SAM prediction with both the precise box and centroid
+        masks, scores, _ = predictor.predict(
+            point_coords=input_points,
+            point_labels=input_labels,
+            box=input_box,
+            multimask_output=True,
+        )
+    else:
+        # Fallback: no object found by traditional CV — use full-image grid
+        cx, cy = w // 2, h // 2
+        offset_x, offset_y = w // 6, h // 6
+        input_points = np.array([
+            [cx, cy],
+            [cx - offset_x, cy - offset_y],
+            [cx + offset_x, cy - offset_y],
+            [cx - offset_x, cy + offset_y],
+            [cx + offset_x, cy + offset_y],
+        ])
+        input_labels = np.array([1, 1, 1, 1, 1])
+        
+        margin_x, margin_y = w // 8, h // 8
+        input_box = np.array([margin_x, margin_y, w - margin_x, h - margin_y])
+        
+        masks, scores, _ = predictor.predict(
+            point_coords=input_points,
+            point_labels=input_labels,
+            box=input_box,
+            multimask_output=True,
+        )
+    
+    # ============================================================
+    # STAGE 3: Pick the best mask from SAM's candidates
+    # ============================================================
     best_mask = None
     max_score = -1
-    image_area = w * h
     
     for i, mask_candidate in enumerate(masks):
         mask_area = np.sum(mask_candidate)
-        # Filter out masks overly large (>95% image area) or too small (<1%)
-        if 0.01 * image_area < mask_area < 0.95 * image_area:
+        # Accept masks between 0.1% and 95% of image area
+        if 0.001 * image_area < mask_area < 0.95 * image_area:
             if scores[i] > max_score:
                 best_mask = mask_candidate
                 max_score = scores[i]
                 
-    # Fallback: if no good mask found, take the smallest valid one (assuming object < background)
+    # Fallback: take the smallest mask (most likely the object, not background)
     if best_mask is None:
-         # Sort by size and take the smallest one likely to be the object
          sorted_indices = np.argsort([np.sum(m) for m in masks])
          best_mask = masks[sorted_indices[0]]
 
